@@ -84,9 +84,8 @@ htmlcov/
 lcov-report/
 coverage.info
 
-# ===== DOCUMENTATION BUILD OUTPUT =====
-docs/html/
-docs/latex/
+# ===== DOCUMENTATION =====
+docs/
 doxygen_sqlite3.db
 
 # ===== PYTHON =====

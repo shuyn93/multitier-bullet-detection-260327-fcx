@@ -1,0 +1,115 @@
+# Git ignore for bullet hole detection system
+
+
+# ===== BUILD =====
+build/
+out/
+.build/
+*.egg-info/
+dist/
+wheels/
+
+# ===== CMAKE =====
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CMakeUserPresets.json
+Makefile
+
+# ===== IDE / EDITOR =====
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.editorconfig
+
+# ===== VISUAL STUDIO =====
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+Debug/
+Release/
+x64/
+*.pdb
+*.ilk
+*.VC.opendb
+*.VC.db
+
+# ===== BUILD ARTIFACTS =====
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+*.exe
+*.app
+*.out
+*.pch
+*.gch
+
+# ===== LOGS =====
+*.log
+CMakeLists.txt.user
+
+# ===== OS-SPECIFIC =====
+.DS_Store
+Thumbs.db
+
+# ===== COMPILER OUTPUT =====
+*.ycm_extra_conf.pyc
+compile_commands.json
+
+# ===== DEPENDENCIES =====
+vcpkg/
+.conan/
+conaninfo.txt
+conanbuildinfo.cmake
+
+# ===== TEST & COVERAGE =====
+*.test
+test_output.txt
+Testing/
+DartConfiguration.tcl
+gtest-all.cc
+*.gcda
+*.gcno
+*.coverage
+.coverage
+htmlcov/
+lcov-report/
+coverage.info
+
+# ===== DOCUMENTATION BUILD OUTPUT =====
+docs/html/
+docs/latex/
+doxygen_sqlite3.db
+
+# ===== PYTHON =====
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+
+.Spotlight-V100
+.Trashes
+
+# Local development
+*.local
+.env
+.venv
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Generated files
+/config.h
+version.h
+

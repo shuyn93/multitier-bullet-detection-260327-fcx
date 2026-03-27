@@ -1,0 +1,71 @@
+{
+  "application": {
+    "name": "Bullet Hole Detection System",
+    "version": "1.0.0",
+    "environment": "production"
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "format": "json",
+    "file": "logs/bullet_detection.log",
+    "max_file_size_mb": 100,
+    "async": true,
+    "module_levels": {
+      "feature_extraction": "DEBUG",
+      "tracking": "INFO",
+      "reconstruction": "DEBUG"
+    }
+  },
+  
+  "feature_extraction": {
+    "window_size": 15,
+    "morphological_size": 3,
+    "gradient_threshold": 30,
+    "fft_enabled": true
+  },
+  
+  "tracking": {
+    "kalman_pos_noise": 1.0,
+    "kalman_vel_noise": 0.5,
+    "max_track_distance": 50.0,
+    "min_confirmation_frames": 5,
+    "smoothness_threshold": 1.5
+  },
+  
+  "reconstruction": {
+    "reprojection_threshold": 2.0,
+    "triangulation_method": "SVD",
+    "bundle_adjustment_enabled": true,
+    "elisac_enabled": true,
+    "outlier_percentage": 5.0
+  },
+  
+  "tier_classification": {
+    "tier1_threshold": 0.5,
+    "tier2_threshold": 0.7,
+    "tier3_threshold": 0.85,
+    "confidence_propagation": true
+  },
+  
+  "performance": {
+    "thread_pool_size": 4,
+    "simd_enabled": true,
+    "memory_pool_enabled": true,
+    "gpu_enabled": false
+  },
+  
+  "monitoring": {
+    "collect_metrics": true,
+    "health_check_interval_sec": 60,
+    "alert_on_error": true,
+    "export_metrics": "json"
+  },
+  
+  "camera": {
+    "calibration_file": "config/camera_calibration.yaml",
+    "resolution_width": 1280,
+    "resolution_height": 1024,
+    "frame_rate": 30
+  }
+}

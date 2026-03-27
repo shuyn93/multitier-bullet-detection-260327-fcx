@@ -1,0 +1,162 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        cmake-version: [3.15, 3.20, 3.25]
+        include:
+          - os: ubuntu-latest
+            cpp-version: "11"
+          - os: windows-latest
+            cpp-version: "14"
+          - os: macos-latest
+            cpp-version: "12"
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    # Install dependencies
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libopencv-dev \
+          libeigen3-dev \
+          cmake
+    
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install opencv eigen cmake
+    
+    - name: Setup CMake (Windows)
+      if: runner.os == 'Windows'
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: ${{ matrix.cmake-version }}
+    
+    # Build
+    - name: Create build directory
+      run: mkdir -p build
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_TESTS=ON \
+              -DWITH_SIMD=ON
+    
+    - name: Build
+      run: cmake --build build --config Release --parallel 4
+    
+    - name: Run tests
+      working-directory: build
+      run: ctest --output-on-failure --parallel 2
+    
+    - name: Test installation
+      run: cmake --install build --prefix install_test
+
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libopencv-dev \
+          libeigen3-dev \
+          cmake \
+          cppcheck \
+          clang-tools
+    
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --suppress=missingIncludeSystem \
+                 --std=c++20 src/ include/ --error-exitcode=1
+    
+    - name: Run clang-tidy
+      run: |
+        cmake -B build -DCMAKE_CXX_CLANG_TIDY="clang-tidy"
+        cmake --build build
+
+  code-coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libopencv-dev \
+          libeigen3-dev \
+          cmake \
+          gcov \
+          lcov
+    
+    - name: Configure with coverage
+      run: |
+        cmake -B build \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DCMAKE_CXX_FLAGS="--coverage" \
+              -DBUILD_TESTS=ON
+    
+    - name: Build
+      run: cmake --build build
+    
+    - name: Run tests
+      working-directory: build
+      run: ctest --output-on-failure
+    
+    - name: Generate coverage report
+      run: |
+        lcov --directory build --capture --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        lcov --list coverage.info
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.info
+        flags: unittests
+        name: codecov-umbrella
+
+  documentation:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install doxygen
+      run: sudo apt-get install -y doxygen graphviz
+    
+    - name: Generate documentation
+      run: doxygen Doxyfile
+    
+    - name: Deploy documentation
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v3
+      with:
+        name: documentation
+        path: docs/

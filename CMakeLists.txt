@@ -51,6 +51,25 @@ target_include_directories(BulletHoleDetection PUBLIC
 
 target_link_libraries(BulletHoleDetection PRIVATE ${OpenCV_LIBS})
 
+# ===== AUTONOMOUS TRAINING & DEBUGGING PIPELINE =====
+add_executable(autonomous_training
+    src/autonomous_training_debug.cpp
+)
+
+target_include_directories(autonomous_training PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# ===== TRAINING PIPELINE EXECUTABLE (Minimal dependencies) =====
+add_executable(training_pipeline
+    src/training_execution.cpp
+    src/core/ProductionReady.cpp
+)
+
+target_include_directories(training_pipeline PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # ===== WORST-CASE SCENARIO & STRESS TESTS =====
 option(BUILD_WORST_CASE_TESTS "Build worst-case scenario tests" ON)
 

@@ -88,6 +88,25 @@ target_include_directories(incremental_training PUBLIC
 
 target_link_libraries(incremental_training PRIVATE ${OpenCV_LIBS})
 
+# ===== ONLINE CURRICULUM LEARNING EXECUTABLE (Self-Improving System) =====
+add_executable(online_curriculum_learning
+    src/online_curriculum_learning_main.cpp
+    src/training/OnlineCurriculumLearner.cpp
+    src/training/IncrementalTrainer.cpp
+    src/tier/Tiers.cpp
+    src/tier/ImprovedModels.cpp
+    src/feature/FeatureExtractor.cpp
+    src/confidence/Calibration.cpp
+    src/core/ProductionReady.cpp
+)
+
+target_include_directories(online_curriculum_learning PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${EIGEN3_INCLUDE_DIRS}
+)
+
+target_link_libraries(online_curriculum_learning PRIVATE ${OpenCV_LIBS})
+
 # ===== WORST-CASE SCENARIO & STRESS TESTS =====
 option(BUILD_WORST_CASE_TESTS "Build worst-case scenario tests" ON)
 

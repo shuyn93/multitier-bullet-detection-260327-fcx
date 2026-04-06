@@ -374,3 +374,4 @@ void FeatureExtractor::normalizeFeatures(CandidateFeature& feat) {
 }
 
 } // namespace bullet_detection
+

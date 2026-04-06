@@ -192,13 +192,19 @@ int main(int argc, char* argv[]) {
             model_output_dir = argv[2];
         }
         
+        // Create model directory if it doesn't exist
+        system("if not exist models mkdir models");
+        system("if not exist results mkdir results");
+        
         // Training configuration
         IncrementalTrainingConfig config;
         config.learning_rate = 0.001f;
-        config.max_epochs = 50;
+        config.max_epochs = 100;  // Increased for better convergence
+        config.min_learning_rate = 0.0001f;
         config.use_curriculum = true;
         config.prioritize_hard_examples = true;
         config.replay_buffer_ratio = 0.20f;  // 20% old data, 80% new data
+        config.new_data_ratio = 0.80f;
         config.max_replay_buffer_size = 2000;
         config.performance_drop_threshold = 0.05f;  // 5% threshold
         config.validate_on_old_data = true;
@@ -206,6 +212,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\n[CONFIGURATION]" << std::endl;
         std::cout << "  New data path: " << new_data_path << std::endl;
         std::cout << "  Model directory: " << model_output_dir << std::endl;
+        std::cout << "  Scaler path: " << scaler_path << std::endl;
         std::cout << "  Learning rate: " << std::fixed << std::setprecision(5) 
                   << config.learning_rate << std::endl;
         std::cout << "  Max epochs: " << config.max_epochs << std::endl;
@@ -250,11 +257,29 @@ int main(int argc, char* argv[]) {
         std::cout << "? INCREMENTAL TRAINING COMPLETED" << std::endl;
         std::cout << std::string(80, '=') << std::endl;
         
-        std::cout << "\nSamples used: " << metrics.total_training_samples << std::endl;
-        std::cout << "Performance before vs after: " 
-                  << std::fixed << std::setprecision(2) << metrics.initial_accuracy * 100.0f 
-                  << "% ? " << metrics.final_accuracy * 100.0f << "%" << std::endl;
-        std::cout << "Stability check: " << (metrics.is_stable ? "? PASSED" : "? FAILED") << std::endl;
+        std::cout << "\n[SUMMARY]" << std::endl;
+        std::cout << "  Samples used: " << metrics.total_training_samples << std::endl;
+        std::cout << "  - New samples: " << metrics.new_samples_count << std::endl;
+        std::cout << "  - Replay buffer: " << metrics.old_samples_count_used << std::endl;
+        
+        std::cout << "\n[PERFORMANCE]" << std::endl;
+        std::cout << "  Before: " << std::fixed << std::setprecision(2) << metrics.initial_accuracy * 100.0f << "%" << std::endl;
+        std::cout << "  After:  " << std::fixed << std::setprecision(2) << metrics.final_accuracy * 100.0f << "%" << std::endl;
+        std::cout << "  Change: " << std::fixed << std::setprecision(2) << metrics.accuracy_change * 100.0f << "%" << std::endl;
+        
+        std::cout << "\n[STABILITY]" << std::endl;
+        std::cout << "  Status: " << (metrics.is_stable ? "? PASSED" : "? FAILED") << std::endl;
+        std::cout << "  Max drop: " << std::fixed << std::setprecision(2) << metrics.max_performance_drop * 100.0f << "%" << std::endl;
+        std::cout << "  Details: " << metrics.stability_status << std::endl;
+        
+        std::cout << "\n[TIMING]" << std::endl;
+        std::cout << "  Training time: " << std::fixed << std::setprecision(2) << metrics.training_time_seconds << "s" << std::endl;
+        std::cout << "  Epochs: " << metrics.epochs_trained << std::endl;
+        
+        std::cout << "\n" << std::string(80, '=') << std::endl;
+        std::cout << "Report saved to: " << report_filename << std::endl;
+        std::cout << "Models saved to: " << model_output_dir << std::endl;
+        std::cout << std::string(80, '=') << std::endl;
         std::cout << "\n";
         
         return 0;

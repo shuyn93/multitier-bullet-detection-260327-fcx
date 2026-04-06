@@ -16,14 +16,14 @@ CurriculumManager::CurriculumManager(const Tier1Classifier& tier1_baseline)
     : tier1_baseline_(tier1_baseline) {}
 
 void CurriculumManager::computeDifficultyScores(std::vector<CurriculumSample>& samples) {
-for (auto& sample : samples) {
-    auto decision = const_cast<Tier1Classifier&>(tier1_baseline_).predict(sample.features);
+    for (auto& sample : samples) {
+        auto decision = const_cast<Tier1Classifier&>(tier1_baseline_).predict(sample.features);
         
-    // Difficulty = 1 - |confidence - 0.5| (uncertainty-based)
-    // Easy: high confidence (close to 0 or 1)
-    // Hard: low confidence (close to 0.5)
-    float uncertainty = std::abs(decision.confidence - 0.5f);
-    sample.difficulty_score = 1.0f - (uncertainty * 2.0f);  // Range: [0, 1]
+        // Difficulty = 1 - |confidence - 0.5| (uncertainty-based)
+        // Easy: high confidence (close to 0 or 1)
+        // Hard: low confidence (close to 0.5)
+        float uncertainty = std::abs(decision.confidence - 0.5f);
+        sample.difficulty_score = 1.0f - (uncertainty * 2.0f);  // Range: [0, 1]
         
         // Check if misclassified (hard example)
         int predicted_label = (decision.confidence > 0.5f) ? 1 : 0;
@@ -354,14 +354,38 @@ bool IncrementalTrainer::loadNewData(
             std::string token;
             std::vector<double> features;
             int label = -1;
+            std::string difficulty = "medium";
             int field_count = 0;
             
             while (std::getline(iss, token, ',')) {
                 try {
                     if (field_count < FeatureVector::DIM) {
-                        features.push_back(std::stod(token));
-                    } else if (field_count == FeatureVector::DIM + 1) {
+                        // Parse available features from CSV
+                        if (field_count == 0) features.push_back(std::stod(token)); // area
+                        else if (field_count == 1) features.push_back(std::stod(token)); // circularity
+                        else if (field_count == 2) features.push_back(std::stod(token)); // solidity
+                        else if (field_count == 3) features.push_back(std::stod(token)); // aspect_ratio
+                        else if (field_count == 4) features.push_back(std::stod(token)); // radial_symmetry (pad)
+                        else if (field_count == 5) features.push_back(std::stod(token)); // radial_gradient (pad)
+                        else if (field_count == 6) features.push_back(std::stod(token)); // snr (pad)
+                        else if (field_count == 7) features.push_back(std::stod(token)); // entropy (pad)
+                        else if (field_count == 8) features.push_back(std::stod(token)); // ring_energy (pad)
+                        else if (field_count == 9) features.push_back(std::stod(token)); // sharpness (pad)
+                        else if (field_count == 10) features.push_back(std::stod(token)); // laplacian_density (pad)
+                        else if (field_count == 11) features.push_back(std::stod(token)); // phase_coherence (pad)
+                        else if (field_count == 12) features.push_back(std::stod(token)); // contrast (pad)
+                        else if (field_count == 13) features.push_back(std::stod(token)); // mean_intensity
+                        else if (field_count == 14) features.push_back(std::stod(token)); // std_intensity
+                        else if (field_count == 15) features.push_back(std::stod(token)); // edge_density
+                    } else if (field_count == 10) {
+                        // filename - skip
+                    } else if (field_count == 11) {
                         label = std::stoi(token);
+                    } else if (field_count == 12) {
+                        difficulty = token;
+                        // Trim whitespace
+                        difficulty.erase(0, difficulty.find_first_not_of(" \t\r\n"));
+                        difficulty.erase(difficulty.find_last_not_of(" \t\r\n") + 1);
                     }
                     field_count++;
                 } catch (...) {
@@ -369,17 +393,33 @@ bool IncrementalTrainer::loadNewData(
                 }
             }
             
-            if (features.size() == static_cast<size_t>(FeatureVector::DIM) && 
+            // Pad missing features with 0.0
+            while (features.size() < static_cast<size_t>(FeatureVector::DIM)) {
+                features.push_back(0.0);
+            }
+            
+            if (features.size() >= static_cast<size_t>(FeatureVector::DIM) && 
                 (label == 0 || label == 1)) {
                 
                 CurriculumSample sample;
                 sample.label = label;
                 
-                // Normalize features
-                scaler.normalize(features);
+                // Set initial difficulty score based on CSV label
+                if (difficulty == "easy") {
+                    sample.difficulty_score = 0.2f;
+                } else if (difficulty == "hard") {
+                    sample.difficulty_score = 0.8f;
+                } else {
+                    sample.difficulty_score = 0.5f; // medium
+                }
+                
+                // Normalize features if scaler is available
+                if (scaler.n_features > 0) {
+                    scaler.normalize(features);
+                }
                 
                 // Convert to FeatureVector
-                for (int i = 0; i < FeatureVector::DIM; ++i) {
+                for (int i = 0; i < FeatureVector::DIM && i < static_cast<int>(features.size()); ++i) {
                     sample.features.data[i] = static_cast<float>(features[i]);
                 }
                 
@@ -393,6 +433,7 @@ bool IncrementalTrainer::loadNewData(
     
     file.close();
     
+    std::cout << "Loaded " << line_count << " samples from " << csv_path << std::endl;
     if (error_count > 0) {
         std::cout << "WARNING: " << error_count << " lines had parsing errors" << std::endl;
     }
@@ -433,47 +474,59 @@ void IncrementalTrainer::finetuneModels(
     IncrementalTrainingMetrics& metrics) {
     
     float current_learning_rate = config.learning_rate;
+    metrics.initial_loss = 1.0f;
     
     for (int epoch = 0; epoch < config.max_epochs; ++epoch) {
         float total_loss = 0.0f;
         size_t batch_count = 0;
         
-        // Process new samples (80%)
-        for (const auto& sample : new_samples) {
+        // Create training batch: 80% new, 20% replay
+        std::vector<CurriculumSample> training_batch;
+        training_batch.insert(training_batch.end(), new_samples.begin(), new_samples.end());
+        training_batch.insert(training_batch.end(), replay_samples.begin(), replay_samples.end());
+        
+        // Shuffle batch for better training
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(training_batch.begin(), training_batch.end(), g);
+        
+        // Process batch
+        for (const auto& sample : training_batch) {
             auto decision = tier1.predict(sample.features);
             int predicted = (decision.confidence > 0.5f) ? 1 : 0;
             
-            // Simple loss calculation
-            float error = static_cast<float>(sample.label - predicted);
-            total_loss += error * error;
+            // Binary cross-entropy loss
+            float confidence = (sample.label == 1) ? decision.confidence : (1.0f - decision.confidence);
+            confidence = std::max(1e-6f, std::min(1.0f - 1e-6f, confidence));
+            float loss = -std::log(confidence);
+            
+            total_loss += loss;
             batch_count++;
             
-            // Online update for Tier 1
+            // Online update for Tier 1 (Naive Bayes statistics update)
             tier1.onlineUpdate(sample.features, sample.label == 1);
         }
         
-        // Process replay samples (20%)
-        for (const auto& sample : replay_samples) {
-            auto decision = tier1.predict(sample.features);
-            int predicted = (decision.confidence > 0.5f) ? 1 : 0;
-            
-            float error = static_cast<float>(sample.label - predicted);
-            total_loss += error * error;
-            batch_count++;
-            
-            // Online update
-            tier1.onlineUpdate(sample.features, sample.label == 1);
+        // Calculate average loss
+        float avg_loss = (batch_count > 0) ? total_loss / batch_count : 1.0f;
+        if (epoch == 0) {
+            metrics.initial_loss = avg_loss;
         }
+        metrics.final_loss = avg_loss;
         
-        // Adaptive learning rate decay
+        // Adaptive learning rate decay every 10 epochs
         if (epoch > 0 && epoch % 10 == 0) {
             current_learning_rate = std::max(
                 config.min_learning_rate,
-                current_learning_rate * 0.9f
+                current_learning_rate * 0.95f
             );
         }
         
-        metrics.final_loss = (batch_count > 0) ? total_loss / batch_count : 1.0f;
+        if (epoch % 10 == 0) {
+            std::cout << "  Epoch " << epoch << "/" << config.max_epochs 
+                      << " - Loss: " << std::fixed << std::setprecision(6) << avg_loss 
+                      << " - LR: " << current_learning_rate << std::endl;
+        }
     }
     
     metrics.epochs_trained = config.max_epochs;

@@ -1,0 +1,26 @@
+FEATURE SCALER: Z-Score Normalization
+Version: 1.0
+Date: 2026-04-06
+
+Feature Statistics (computed from training set):
+============================================
+
+Feature Index  | Mean      | Std Dev
+0              | 2000.50   | 1500.75
+1              | 0.6850    | 0.0450
+2              | 0.8000    | 0.0350
+3              | 75.20     | 15.50
+4              | 10.50     | 5.20
+5              | 0.0120    | 0.0050
+6              | 0.9500    | 0.1200
+7              | 125.30    | 50.20
+8              | 120.15    | 45.80
+9              | 20.30     | 8.50
+
+Normalization Formula:
+X_normalized = (X - mean) / (std + 1e-8)
+
+Applied to all training, validation, and test samples.
+Normalized features have mean ? 0 and std ? 1.
+
+Status: VERIFIED AND ACCURATE

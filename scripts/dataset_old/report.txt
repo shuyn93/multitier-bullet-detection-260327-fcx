@@ -1,0 +1,14 @@
+DATASET GENERATION REPORT
+================================================================================
+
+Status: COMPLETE
+Total samples: 10000
+Generation time: 11.2 seconds
+Dataset path: C:\Users\Admin\source\repos\bullet_hole_detection_system\scripts\dataset
+
+Label distribution:
+  bullet_hole: 5000 (50.0%)
+  non_bullet: 3000 (30.0%)
+  ambiguous: 2000 (20.0%)
+
+? Dataset ready for training

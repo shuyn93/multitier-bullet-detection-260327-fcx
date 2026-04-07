@@ -23,9 +23,10 @@ else()
   add_compile_options(-std=c++20)
 endif()
 
-find_package(OpenCV REQUIRED)
-find_package(Eigen3 REQUIRED)
+find_package(OpenCV QUIET)
+find_package(Eigen3 QUIET)
 
+if(OpenCV_FOUND AND Eigen3_FOUND)
 add_executable(BulletHoleDetection 
     src/main.cpp
     src/pipeline/Pipeline.cpp
@@ -50,6 +51,7 @@ target_include_directories(BulletHoleDetection PUBLIC
 )
 
 target_link_libraries(BulletHoleDetection PRIVATE ${OpenCV_LIBS})
+endif()
 
 # ===== AUTONOMOUS TRAINING & DEBUGGING PIPELINE =====
 add_executable(autonomous_training
@@ -71,6 +73,7 @@ target_include_directories(training_pipeline PUBLIC
 )
 
 # ===== INCREMENTAL TRAINING EXECUTABLE (Continuous Learning) =====
+if(OpenCV_FOUND AND Eigen3_FOUND)
 add_executable(incremental_training
     src/incremental_training_main.cpp
     src/training/IncrementalTrainer.cpp
@@ -87,8 +90,19 @@ target_include_directories(incremental_training PUBLIC
 )
 
 target_link_libraries(incremental_training PRIVATE ${OpenCV_LIBS})
+endif()
+
+# ===== ONLINE CURRICULUM EXECUTION (Direct simulator - no OpenCV needed) =====
+add_executable(online_curriculum_execution
+    src/online_curriculum_execution.cpp
+)
+
+target_include_directories(online_curriculum_execution PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 
 # ===== ONLINE CURRICULUM LEARNING EXECUTABLE (Self-Improving System) =====
+if(OpenCV_FOUND AND Eigen3_FOUND)
 add_executable(online_curriculum_learning
     src/online_curriculum_learning_main.cpp
     src/training/OnlineCurriculumLearner.cpp
@@ -106,6 +120,7 @@ target_include_directories(online_curriculum_learning PUBLIC
 )
 
 target_link_libraries(online_curriculum_learning PRIVATE ${OpenCV_LIBS})
+endif()
 
 # ===== WORST-CASE SCENARIO & STRESS TESTS =====
 option(BUILD_WORST_CASE_TESTS "Build worst-case scenario tests" ON)

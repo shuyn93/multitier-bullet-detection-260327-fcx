@@ -1044,7 +1044,3 @@ Hệ thống phát hiện lỗ đạn này kết hợp:
 
 ---
 
-**Tài liệu này do AI Copilot tạo lập.**  
-**Cập nhật lần cuối:** 2024  
-**Ngôn Ngữ:** Tiếng Việt  
-

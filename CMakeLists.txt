@@ -36,6 +36,8 @@ add_executable(BulletHoleDetection
     src/tier/ImprovedModels.cpp
     src/tier/ImprovedTierLogic.cpp
     src/candidate/CandidateDetector.cpp
+    src/candidate/ImprovedCandidateDetector.cpp
+    src/candidate/RobustNoiseFilter.cpp
     src/calibration/CameraModel.cpp
     src/reconstruction/Triangulation.cpp
     src/reconstruction/ImprovedTriangulation.cpp
@@ -156,6 +158,41 @@ if(BUILD_WORST_CASE_TESTS)
   # Register with CTest
   enable_testing()
   add_test(NAME WorstCaseScenarios COMMAND test_worst_case_scenarios)
+endif()
+
+# ===== STEP 2 & 3 UNIT TEST =====
+if(OpenCV_FOUND)
+add_executable(test_step2_step3_unit
+    tests/test_step2_step3_unit.cpp
+    src/candidate/ImprovedCandidateDetector.cpp
+    src/candidate/RobustNoiseFilter.cpp
+)
+
+target_include_directories(test_step2_step3_unit PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_step2_step3_unit PRIVATE ${OpenCV_LIBS})
+
+enable_testing()
+add_test(NAME STEP2STEP3Unit COMMAND test_step2_step3_unit)
+endif()
+
+# ===== STEP 2 & 3 INTEGRATION TEST =====
+if(OpenCV_FOUND)
+add_executable(test_integration_real_image
+    tests/test_integration_real_image.cpp
+    src/candidate/ImprovedCandidateDetector.cpp
+    src/candidate/RobustNoiseFilter.cpp
+)
+
+target_include_directories(test_integration_real_image PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_integration_real_image PRIVATE ${OpenCV_LIBS})
+
+add_test(NAME IntegrationRealImage COMMAND test_integration_real_image)
 endif()
 
 # TODO: Add tests and install targets if needed.

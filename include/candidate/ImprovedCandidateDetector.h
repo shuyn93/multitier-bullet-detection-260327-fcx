@@ -218,7 +218,7 @@ private:
     float min_solidity_ = 0.6f;
     float min_radial_symmetry_ = 0.5f;
     float min_radial_gradient_ = 0.4f;
-    float min_contrast_ = 10.0f;        // Min intensity difference
+    float min_contrast_ = 5.0f;        // Lowered from 10.0f to catch more small holes
 
     // Feature flags
     bool denoise_enabled_ = true;

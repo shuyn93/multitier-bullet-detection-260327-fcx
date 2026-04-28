@@ -11,6 +11,11 @@
 #include <cmath>
 #include <iostream>
 
+// Define M_PI if not available
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace bullet_detection {
 
 ImprovedBlobDetectorCpp::ImprovedBlobDetectorCpp(int image_size)
@@ -56,23 +61,55 @@ std::vector<BlobCandidate> ImprovedBlobDetectorCpp::detectSmallObjects(const cv:
         return std::vector<BlobCandidate>();
     }
     
-    // Only adaptive threshold for small objects (skip multi-threshold for speed)
-    std::vector<std::vector<cv::Point>> candidates = detectAdaptiveThreshold(image);
-    
-    // Filter for small sizes only
     std::vector<std::vector<cv::Point>> small_candidates;
-    for (const auto& contour : candidates) {
-        double area = cv2::contourArea(contour);
+    
+    // Strategy A: Multi-threshold with LOWER thresholds (catch dimmer small holes)
+    for (int threshold : {30, 50, 80, 120}) {
+        cv::Mat binary;
+        cv::threshold(image, binary, threshold, 255, cv::THRESH_BINARY);
+        
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(binary.clone(), contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+        
+        for (const auto& contour : contours) {
+            double area = cv::contourArea(contour);
+            // Target: radius < 10 px ? area < ?*100 ? 314 px²
+            // But be generous: accept up to 400 px² (r?11.3)
+            if (area >= min_size_small_ && area <= max_size_small_) {
+                small_candidates.push_back(contour);
+            }
+        }
+    }
+    
+    // Strategy B: Adaptive threshold (good for varying local brightness)
+    auto adaptive_cands = detectAdaptiveThreshold(image);
+    for (const auto& contour : adaptive_cands) {
+        double area = cv::contourArea(contour);
         if (area >= min_size_small_ && area <= max_size_small_) {
             small_candidates.push_back(contour);
         }
     }
     
-    std::cout << "Small object detection: Found " << small_candidates.size() 
+    // Deduplicate
+    auto unique_candidates = deduplicateCandidates(small_candidates);
+    
+    std::cout << "Small object detection: Found " << unique_candidates.size() 
               << " small blobs (r<10)" << std::endl;
     
-    // Filter and score
-    return filterAndScoreCandidates(image, small_candidates);
+    // Filter and score (with relaxed criteria for small objects)
+    std::vector<BlobCandidate> results;
+    for (const auto& contour : unique_candidates) {
+        BlobCandidate blob = computeQualityScores(image, contour);
+        
+        // RELAXED criteria for small objects
+        // Small holes may have lower circularity due to pixelization
+        if (blob.circularity >= 0.2f &&                    // Very relaxed
+            blob.intensity_contrast > 5.0f) {               // Lower threshold for small
+            results.push_back(blob);
+        }
+    }
+    
+    return results;
 }
 
 std::vector<BlobCandidate> ImprovedBlobDetectorCpp::detectBlobsHighRes(
@@ -216,10 +253,15 @@ std::vector<std::vector<cv::Point>> ImprovedBlobDetectorCpp::detectMorphological
     cv::Mat binary;
     cv::threshold(image, binary, 0, 255, cv::THRESH_BINARY + cv::THRESH_OTSU);
     
-    // Morphological reconstruction
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
-    cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 1);
-    cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 1);
+    // Morphological operations with SIZE-AWARE kernels
+    // Small kernel (3x3) for preserving small blobs
+    cv::Mat kernel_small = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+    
+    // Apply gentle morphology to preserve small structures
+    cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, kernel_small, cv::Point(-1, -1), 1);
+    
+    // Optional: larger kernel for final cleanup (but preserve small blobs)
+    // cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel_small, cv::Point(-1, -1), 1);
     
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(binary.clone(), contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
@@ -296,11 +338,24 @@ std::vector<BlobCandidate> ImprovedBlobDetectorCpp::filterAndScoreCandidates(
     for (const auto& contour : contours) {
         BlobCandidate blob = computeQualityScores(image, contour);
         
-        // Apply filtering criteria (STAGE 2)
-        if (blob.circularity >= min_circularity_loose_ && 
-            blob.intensity_contrast > 10.0f) {  // At least 10 intensity above background
-            
-            filtered.push_back(blob);
+        // Determine if small or normal blob
+        double area = cv::contourArea(contour);
+        bool is_small = (area < max_size_small_);  // r < 10 px
+        
+        // ADAPTIVE filtering based on size
+        if (is_small) {
+            // STAGE 2 for SMALL blobs: Very lenient
+            // (precision filter happens in later tiers)
+            if (blob.circularity >= 0.2f &&                    // Very low threshold
+                blob.intensity_contrast > 3.0f) {               // Very low threshold
+                filtered.push_back(blob);
+            }
+        } else {
+            // STAGE 2 for NORMAL blobs: Stricter
+            if (blob.circularity >= min_circularity_loose_ && 
+                blob.intensity_contrast > 10.0f) {
+                filtered.push_back(blob);
+            }
         }
     }
     
@@ -338,10 +393,32 @@ BlobCandidate ImprovedBlobDetectorCpp::computeQualityScores(
     cv::Scalar mean = cv::mean(roi);
     blob.blob_intensity = static_cast<float>(mean[0]);
     
-    // Background intensity (approximate as image mean outside contour)
-    // Simple approximation: use global image mean
-    cv::Scalar img_mean = cv::mean(image);
-    blob.background_intensity = static_cast<float>(img_mean[0] * 0.7f);  // Assume background ~70% of mean
+    // IMPROVED: Compute background intensity by sampling around blob
+    // Create a mask for the contour
+    cv::Mat mask = cv::Mat::zeros(image.size(), CV_8U);
+    cv::drawContours(mask, std::vector<std::vector<cv::Point>>{contour}, 0, cv::Scalar(255), -1);
+    
+    // Sample pixels in ROI but OUTSIDE contour for background estimate
+    // Dilate the mask to get a border region
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+    cv::Mat dilated_mask;
+    cv::dilate(mask, dilated_mask, kernel, cv::Point(-1, -1), 2);
+    
+    // Border region = dilated - original
+    cv::Mat border_mask = dilated_mask - mask;
+    
+    // Sample background in border region within ROI
+    if (cv::countNonZero(border_mask(bbox)) > 0) {
+        cv::Mat border_samples = image(bbox).clone();
+        border_samples.setTo(0, (border_mask(bbox) == 0));  // Keep only border pixels
+        
+        cv::Scalar border_mean = cv::mean(border_samples);
+        blob.background_intensity = static_cast<float>(border_mean[0]);
+    } else {
+        // Fallback: use global mean scaled
+        cv::Scalar img_mean = cv::mean(image);
+        blob.background_intensity = static_cast<float>(img_mean[0] * 0.8f);
+    }
     
     blob.intensity_contrast = blob.blob_intensity - blob.background_intensity;
     

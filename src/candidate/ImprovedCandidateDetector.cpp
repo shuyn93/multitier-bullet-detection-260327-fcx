@@ -1,8 +1,10 @@
 #include "candidate/ImprovedCandidateDetector.h"
+#include "candidate/ImprovedCandidateDetector.h"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/imgproc/types_c.h>
 #include <opencv2/highgui.hpp>
 
 #ifndef M_PI
@@ -129,6 +131,9 @@ cv::Mat ImprovedCandidateDetector::denoiseImage(const cv::Mat& image) {
 cv::Mat ImprovedCandidateDetector::enhanceContrast(const cv::Mat& image) {
     cv::Mat result;
 
+    // Use CLAHE on the image directly (works for both grayscale and color)
+    // For color images, apply to intensity/luminance
+    
     if (image.channels() == 1) {
         // Grayscale: use CLAHE directly
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(
@@ -137,12 +142,18 @@ cv::Mat ImprovedCandidateDetector::enhanceContrast(const cv::Mat& image) {
         );
         clahe->apply(image, result);
     } else {
-        // Color: convert to LAB, enhance L channel, convert back
-        cv::Mat lab;
-        cv::cvtColor(image, lab, cv::COLOR_BGR2LAB);
+        // Color: convert to YCrCb, enhance Y channel, convert back
+        // (More portable than LAB which may not be available)
+        cv::Mat ycrcb;
+        try {
+            cv::cvtColor(image, ycrcb, cv::COLOR_BGR2YCrCb);
+        } catch (...) {
+            // Fallback: just use the input image
+            return image.clone();
+        }
 
         std::vector<cv::Mat> channels;
-        cv::split(lab, channels);
+        cv::split(ycrcb, channels);
 
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(
             clahe_clip_limit_,
@@ -150,8 +161,8 @@ cv::Mat ImprovedCandidateDetector::enhanceContrast(const cv::Mat& image) {
         );
         clahe->apply(channels[0], channels[0]);
 
-        cv::merge(channels, lab);
-        cv::cvtColor(lab, result, cv::COLOR_LAB2BGR);
+        cv::merge(channels, ycrcb);
+        cv::cvtColor(ycrcb, result, cv::COLOR_YCrCb2BGR);
     }
 
     return result;
@@ -303,29 +314,38 @@ void ImprovedCandidateDetector::processSmallBlobs(
 
     std::vector<std::vector<cv::Point>> additional_small_blobs;
 
-    for (const auto& contour : contours) {
-        double area = cv::contourArea(contour);
+    for (auto it = contours.begin(); it != contours.end(); ++it) {
+        double area = cv::contourArea(*it);
 
         if (area > 0 && area < SMALL_BLOB_THRESHOLD) {
-            // This is a small blob - check if it should be preserved/enhanced
-            cv::Rect bbox = cv::boundingRect(contour);
+            // This is a small blob - verify it has sufficient intensity
+            cv::Rect bbox = cv::boundingRect(*it);
+            
+            // Clamp bbox to image bounds
+            bbox.x = std::max(0, bbox.x);
+            bbox.y = std::max(0, bbox.y);
+            bbox.width = std::min(bbox.width, original_image.cols - bbox.x);
+            bbox.height = std::min(bbox.height, original_image.rows - bbox.y);
+            
+            if (bbox.area() <= 0) continue;
+            
             cv::Mat roi = original_image(bbox);
 
-            // If small blob has high intensity (likely bullet hole)
+            // If small blob has reasonable intensity (likely bullet hole)
             float mean_intensity = cv::mean(roi)[0];
-
-            if (mean_intensity > 150) {
-                // Keep it and mark for potential enhancement
-                // (In future: apply super-resolution or interpolation)
+            
+            // For small holes, use lower threshold (dim holes are still valid)
+            if (mean_intensity > 80) {
+                // Small blob confirmed as potentially valid
+                // It remains in the contours list and passes through
             }
         }
     }
 
-    // Add any recovered small blobs
-    for (const auto& blob : additional_small_blobs) {
-        contours.push_back(blob);
-    }
+    // Note: Removed the erase logic - we keep all small blobs for Stage 2 filtering
+    // Stage 2 (RobustNoiseFilter) will make the final precision decision
 }
+
 
 // ===== RADIAL PROPERTIES (EARLY) =====
 

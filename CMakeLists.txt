@@ -196,4 +196,41 @@ target_link_libraries(test_integration_real_image PRIVATE ${OpenCV_LIBS})
 add_test(NAME IntegrationRealImage COMMAND test_integration_real_image)
 endif()
 
+# ===== STEP 2: BLOB DETECTION TEST =====
+if(OpenCV_FOUND)
+add_executable(test_step2_blob_detection
+    tests/test_step2_blob_detection.cpp
+    src/candidate/ImprovedBlobDetectorStep2.cpp
+    src/candidate/ImprovedCandidateDetector.cpp
+)
+
+target_include_directories(test_step2_blob_detection PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_step2_blob_detection PRIVATE ${OpenCV_LIBS})
+
+enable_testing()
+add_test(NAME STEP2BlobDetection COMMAND test_step2_blob_detection)
+endif()
+
+# ===== STEP 3: FEATURE EXTRACTION OPTIMIZATION TEST =====
+if(OpenCV_FOUND)
+add_executable(test_step3_feature_optimization
+    tests/test_step3_feature_optimization.cpp
+    src/feature/ImprovedFeatureExtractorOptimized.cpp
+    src/candidate/ImprovedBlobDetectorStep2.cpp
+    src/candidate/ImprovedCandidateDetector.cpp
+)
+
+target_include_directories(test_step3_feature_optimization PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_step3_feature_optimization PRIVATE ${OpenCV_LIBS})
+
+enable_testing()
+add_test(NAME STEP3FeatureOptimization COMMAND test_step3_feature_optimization)
+endif()
+
 # TODO: Add tests and install targets if needed.

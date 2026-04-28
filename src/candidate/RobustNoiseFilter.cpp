@@ -299,14 +299,15 @@ float RobustNoiseFilter::computeWaveletConsistency(const cv::Mat& roi) {
 }
 
 float RobustNoiseFilter::computePhaseCoherence(const cv::Mat& roi) {
-    if (roi.empty()) return 0.5f;
+if (roi.empty()) return 0.5f;
 
-    cv::Mat float_roi;
-    roi.convertTo(float_roi, CV_32F) / 255.0f;
+cv::Mat float_roi;
+roi.convertTo(float_roi, CV_32F);
+float_roi = float_roi / 255.0f;
 
-    // FFT
-    cv::Mat fft_result;
-    cv::dft(float_roi, fft_result, cv::DFT_COMPLEX_OUTPUT);
+// FFT
+cv::Mat fft_result;
+cv::dft(float_roi, fft_result, cv::DFT_COMPLEX_OUTPUT);
 
     // Extract phase
     std::vector<cv::Mat> planes;

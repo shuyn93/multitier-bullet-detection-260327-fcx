@@ -37,6 +37,7 @@ add_executable(BulletHoleDetection
     src/tier/ImprovedTierLogic.cpp
     src/candidate/CandidateDetector.cpp
     src/candidate/ImprovedCandidateDetector.cpp
+    src/candidate/ImprovedBlobDetectorStep2.cpp
     src/candidate/RobustNoiseFilter.cpp
     src/calibration/CameraModel.cpp
     src/reconstruction/Triangulation.cpp
